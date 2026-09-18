@@ -27,15 +27,24 @@ Built a residual/hybrid Neural ODE: `f_θ(t, X) = f_known(t, X) + correction_net
 - Trained model's trajectory closely tracks the known-physics/analytical solution at fine resolution: max error ≈ **0.017**, compared to ≈1e-9 for pure known-physics RK4 — roughly 0.3–0.5% of the trajectory's signal range (~-3.2 to 5).
 - Result is reproducible across independent training runs (fresh random initialization), producing similar loss curves and final error.
 
-**Files:** `neural_ode_from_scratch.ipynb`
+## Stage 3: Noise Robustness (Fixed-step vs Adaptive-step) — Complete!
 
-## Stage 3: Noise Robustness — In progress...
+Compared fixed-step RK4 (dt=0.05, deliberately coarsened relative to Stage 1/2) against SciPy's adaptive-step RK45 under injected process noise, to characterize when a fixed-step integrator can be trusted as a substitute for an adaptive one.
 
-Planned: inject noise into the observed trajectory or system dynamics, compare fixed-step RK4 against an adaptive-step method (e.g., RK45), and characterize where/why the fixed-step solver degrades under noise.
+**Method:** noise was pre-generated once per run as a fixed lookup function of time (not redrawn on every solver call — an earlier version that redrew noise per-call caused RK45's adaptive step controller to spiral toward vanishingly small steps and hang, since it misread noise-driven derivative changes as high local error). Both solvers see an identical noise realization per run. 30 independent runs per noise level, each with an independent noise realization; final-state distributions compared via std ratio and a two-sample t-test.
+
+**Finding — a threshold effect, not gradual degradation:**
+- At near-zero noise (noise_std≈1e-6), RK4 and RK45 agree closely: std ratio ≈ 1.08.
+- At any meaningfully non-zero noise level (noise_std=0.5 and above), the std ratio jumps immediately to ≈5.8 and then stays essentially flat as noise_std increases further, up to noise_std=8.
+- This indicates the gap isn't driven by noise *magnitude* — it's a step-function onset: once noise exceeds the timescale RK4's fixed dt=0.05 can resolve, the fixed-step solver's accuracy degrades sharply and further noise increases don't widen the gap much more, since step size becomes the binding constraint.
+- At high noise (noise_std=8), RK4 occasionally produces final states far outside its typical spread (visible as isolated histogram bars near ±4), while RK45 stays tightly clustered.
+
+**Caveat:** this uses a fixed, deterministic-per-run noise function rather than a full stochastic differential equation (SDE) treatment (e.g., Euler-Maruyama). It's a reasonable simplification for comparing solver behavior under noisy forcing.
+
+**Files:** `plot1.png`, `distribution_plot.png`
 
 ---
 
 ## Repo structure
 - `main.mlx` — Stage 1, MATLAB
-- `neural_ode_from_scratch.py` — Stage 2, Python
-- plots/ — validation and error plots referenced above
+- `neural_ode_from_scratch.ipynb` — Stage 2 and 3, Python
